@@ -216,6 +216,7 @@ class DoAiMultiTask:
 
         DAQmxCreateTask("", byref(self.ai_handle))
         DAQmxCreateTask("", byref(self.do_handle))
+        DAQmxWaitUntilTaskDone(self.ai_handle, -1)
 
         DAQmxCreateAIVoltageChan(self.ai_handle, ai_device, "", DAQmx_Val_Diff, -10.0, 10.0, DAQmx_Val_Volts, None)
         DAQmxCreateDOChan(self.do_handle, do_device, "", DAQmx_Val_ChanPerLine)
@@ -253,7 +254,6 @@ class DoAiMultiTask:
 
         DAQmxClearTask(self.do_handle)
         DAQmxClearTask(self.ai_handle)
-
 
 class AoAiMultiTask:
     def __init__(self, ai_device, ai_channels, ao_device, samprate, secs, write, sync_clock):
