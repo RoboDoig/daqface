@@ -98,6 +98,38 @@ class DigitalOut(Task):
         return 0
 
 
+class ThreadSafeDigitalOut:
+    def __init__(self, device, samprate, secs, write, clock=''):
+        self.do_handle = TaskHandle(0)
+
+        DAQmxCreateTask("", byref(self.do_handle))
+
+        DAQmxCreateDOChan(self.do_handle, device, '', DAQmx_Val_ChanPerLine)
+
+        self.sampsPerChanWritten = int32()
+        self.write = Util.binary_to_digital_map(write)
+
+        self.totalLength = numpy.uint64(samprate * secs)
+
+        DAQmxCfgSampClkTiming(self.do_handle, clock, samprate, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps,
+                              numpy.uint64(self.totalLength))
+
+    def DoTask(self):
+        DAQmxWriteDigitalU32(self.do_handle, self.write.shape[1], 0, -1, DAQmx_Val_GroupByChannel, self.write,
+                             byref(self.sampsPerChanWritten), None)
+
+        DAQmxStartTask(self.do_handle)
+        DAQmxWaitUntilTaskDone(self.do_handle, DAQmx_Val_WaitInfinitely)
+
+        self.ClearTasks()
+
+    def ClearTasks(self):
+        time.sleep(0.05)
+        DAQmxStopTask(self.do_handle)
+
+        DAQmxClearTask(self.do_handle)
+
+
 # region [AnalogTasks]
 
 
@@ -214,17 +246,19 @@ class DoAiMultiTask:
         self.ai_handle = TaskHandle(0)
         self.do_handle = TaskHandle(1)
 
-        DAQmxCreateTask("", byref(self.ai_handle))
-        DAQmxCreateTask("", byref(self.do_handle))
-        DAQmxWaitUntilTaskDone(self.ai_handle, -1)
+        DAQmxCreateTask('', byref(self.ai_handle))
+        DAQmxCreateTask('', byref(self.do_handle))
 
-        DAQmxCreateAIVoltageChan(self.ai_handle, ai_device, "", DAQmx_Val_Diff, -10.0, 10.0, DAQmx_Val_Volts, None)
-        DAQmxCreateDOChan(self.do_handle, do_device, "", DAQmx_Val_ChanPerLine)
+        DAQmxCreateAIVoltageChan(self.ai_handle, ai_device, '', DAQmx_Val_Diff, -10.0, 10.0, DAQmx_Val_Volts, None)
+        DAQmxCreateDOChan(self.do_handle, do_device, '', DAQmx_Val_ChanForAllLines)
 
         self.ai_read = int32()
         self.ai_channels = ai_channels
         self.sampsPerChanWritten = int32()
+
         self.write = Util.binary_to_digital_map(write)
+        self.sampsPerChan = self.write.shape[1]
+        self.write = numpy.sum(self.write, axis=0)
 
         self.totalLength = numpy.uint64(samp_rate * secs)
         self.analogData = numpy.zeros((self.ai_channels, self.totalLength), dtype=numpy.float64)
@@ -235,7 +269,7 @@ class DoAiMultiTask:
                               numpy.uint64(self.totalLength))
 
     def DoTask(self):
-        DAQmxWriteDigitalU32(self.do_handle, self.write.shape[1], 0, -1, DAQmx_Val_GroupByChannel, self.write,
+        DAQmxWriteDigitalU32(self.do_handle, self.sampsPerChan, 0, -1, DAQmx_Val_GroupByChannel, self.write,
                              byref(self.sampsPerChanWritten), None)
 
         DAQmxStartTask(self.do_handle)
@@ -254,6 +288,7 @@ class DoAiMultiTask:
 
         DAQmxClearTask(self.do_handle)
         DAQmxClearTask(self.ai_handle)
+
 
 class AoAiMultiTask:
     def __init__(self, ai_device, ai_channels, ao_device, samprate, secs, write, sync_clock):
