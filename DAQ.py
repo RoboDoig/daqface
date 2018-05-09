@@ -290,6 +290,57 @@ class DoAiMultiTask:
         DAQmxClearTask(self.ai_handle)
 
 
+class DoAiTriggeredMultiTask:
+    def __init__(self, ai_device, ai_channels, do_device, samp_rate, secs, write, sync_clock, trigger_source):
+        self.ai_handle = TaskHandle(0)
+        self.do_handle = TaskHandle(1)
+
+        DAQmxCreateTask('', byref(self.ai_handle))
+        DAQmxCreateTask('', byref(self.do_handle))
+
+        DAQmxCreateAIVoltageChan(self.ai_handle, ai_device, '', DAQmx_Val_Diff, -10.0, 10.0, DAQmx_Val_Volts, None)
+        DAQmxCreateDOChan(self.do_handle, do_device, '', DAQmx_Val_ChanForAllLines)
+        # DAQmxCfgAnlgEdgeStartTrig(self.ai_handle, trigger_source, DAQmx_Val_RisingSlope, 4.0)
+        DAQmxCfgDigEdgeStartTrig(self.ai_handle, trigger_source, DAQmx_Val_Rising)
+
+        self.ai_read = int32()
+        self.ai_channels = ai_channels
+        self.sampsPerChanWritten = int32()
+
+        self.write = Util.binary_to_digital_map(write)
+        self.sampsPerChan = self.write.shape[1]
+        self.write = numpy.sum(self.write, axis=0)
+
+        self.totalLength = numpy.uint64(samp_rate * secs)
+        self.analogData = numpy.zeros((self.ai_channels, self.totalLength), dtype=numpy.float64)
+
+        DAQmxCfgSampClkTiming(self.ai_handle, '', samp_rate, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps,
+                              numpy.uint64(self.totalLength))
+        DAQmxCfgSampClkTiming(self.do_handle, sync_clock, samp_rate, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps,
+                              numpy.uint64(self.totalLength))
+
+    def DoTask(self):
+        DAQmxWriteDigitalU32(self.do_handle, self.sampsPerChan, 0, -1, DAQmx_Val_GroupByChannel, self.write,
+                             byref(self.sampsPerChanWritten), None)
+
+        DAQmxStartTask(self.do_handle)
+        DAQmxStartTask(self.ai_handle)
+
+        DAQmxReadAnalogF64(self.ai_handle, self.totalLength, -1, DAQmx_Val_GroupByChannel, self.analogData,
+                           numpy.uint32(self.ai_channels*self.totalLength), byref(self.ai_read), None)
+
+        self.ClearTasks()
+        return self.analogData
+
+    def ClearTasks(self):
+        time.sleep(0.05)
+        DAQmxStopTask(self.do_handle)
+        DAQmxStopTask(self.ai_handle)
+
+        DAQmxClearTask(self.do_handle)
+        DAQmxClearTask(self.ai_handle)
+
+
 class AoAiMultiTask:
     def __init__(self, ai_device, ai_channels, ao_device, samprate, secs, write, sync_clock):
         self.ai_handle = TaskHandle(0)
