@@ -82,7 +82,7 @@ class DigitalOut(Task):
 
         self.AutoRegisterDoneEvent(0)
 
-        self.write = Util.binaryToDigitalMap(write)
+        self.write = Util.binary_to_digital_map(write)
 
     def DoTask(self):
         print ('Starting digital output')
@@ -240,6 +240,46 @@ class AnalogOutput(Task):
 
 # region [MultiTasks]
 
+class DoCoTask:
+    def __init__(self, do_device, co_device, samp_rate, secs, write):
+        self.do_handle = TaskHandle(0)
+        self.co_handle = TaskHandle(1)
+
+        DAQmxCreateTask('', byref(self.do_handle))
+        DAQmxCreateTask('', byref(self.co_handle))
+
+        DAQmxCreateCOPulseChanFreq(self.co_handle, 'cDAQ1/Ctr0', '', DAQmx_Val_Hz, DAQmx_Val_Low, 0.0, samp_rate, 0.5)
+        DAQmxCreateDOChan(self.do_handle, do_device, '', DAQmx_Val_ChanForAllLines)
+
+        self.totalLength = numpy.uint64(samp_rate * secs)
+        self.secs = secs
+        print(self.totalLength)
+        self.sampsPerChanWritten = int32()
+        self.write = Util.binary_to_digital_map(write)
+        self.sampsPerChan = self.write.shape[1]
+        self.write = numpy.sum(self.write, axis=0)
+
+        DAQmxCfgImplicitTiming(self.co_handle, DAQmx_Val_FiniteSamps, self.totalLength)
+        DAQmxCfgSampClkTiming(self.do_handle, '/cDAQ1/Ctr0InternalOutput', samp_rate, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps,
+                              numpy.uint64(self.totalLength))
+
+    def DoTask(self):
+        DAQmxWriteDigitalU32(self.do_handle, self.sampsPerChan, 0, -1, DAQmx_Val_GroupByChannel, self.write,
+                             byref(self.sampsPerChanWritten), None)
+
+        DAQmxStartTask(self.do_handle)
+        DAQmxStartTask(self.co_handle)
+        time.sleep(self.secs + 0.05)
+
+        self.ClearTasks()
+
+    def ClearTasks(self):
+        time.sleep(0.05)
+        DAQmxStopTask(self.do_handle)
+        DAQmxStopTask(self.co_handle)
+
+        DAQmxClearTask(self.do_handle)
+        DAQmxClearTask(self.co_handle)
 
 class DoAiMultiTask:
     def __init__(self, ai_device, ai_channels, do_device, samp_rate, secs, write, sync_clock):
