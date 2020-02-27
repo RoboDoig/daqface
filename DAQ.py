@@ -302,7 +302,6 @@ class DoCoTask:
 
         self.totalLength = numpy.uint64(samp_rate * secs)
         self.secs = secs
-        print(self.totalLength)
         self.sampsPerChanWritten = int32()
         self.write = Util.binary_to_digital_map(write)
         self.sampsPerChan = self.write.shape[1]
