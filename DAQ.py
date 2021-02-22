@@ -306,6 +306,8 @@ class DoCoTask:
         self.write = Util.binary_to_digital_map(write)
         self.sampsPerChan = self.write.shape[1]
         self.write = numpy.sum(self.write, axis=0)
+        print(self.write.shape)
+        print(self.write[:200])
 
         DAQmxCfgImplicitTiming(self.co_handle, DAQmx_Val_FiniteSamps, self.totalLength)
         DAQmxCfgSampClkTiming(self.do_handle, '/cDAQ1/Ctr0InternalOutput', samp_rate, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps,
@@ -319,8 +321,6 @@ class DoCoTask:
         DAQmxStartTask(self.co_handle)
         DAQmxWaitUntilTaskDone(self.co_handle, 100)
         DAQmxWaitUntilTaskDone(self.do_handle, 100)
-
-
         self.ClearTasks()
 
     def ClearTasks(self):
