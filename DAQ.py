@@ -297,8 +297,8 @@ class DoCoTask:
         DAQmxCreateTask('', byref(self.do_handle))
         DAQmxCreateTask('', byref(self.co_handle))
 
-        DAQmxCreateCOPulseChanFreq(self.co_handle, 'cDAQ1/Ctr0', '', DAQmx_Val_Hz, DAQmx_Val_Low, 0.0, samp_rate, 0.5)
-        DAQmxCreateDOChan(self.do_handle, do_device, '', DAQmx_Val_ChanForAllLines)
+        DAQmxCreateCOPulseChanFreq(self.co_handle, 'cDAQ1/Ctr0', '', DAQmx_Val_Hz, DAQmx_Val_Low, 0.0, samp_rate, 0.5)  ## Creates a channel to generate digital pulses
+        DAQmxCreateDOChan(self.do_handle, do_device, '', DAQmx_Val_ChanForAllLines) 
 
         self.totalLength = numpy.uint64(samp_rate * secs)
         self.secs = secs
@@ -517,6 +517,21 @@ class MultiTask:
         DAQmxReadDigitalU32(self.di_handle, self.totalLength, -1, DAQmx_Val_GroupByChannel, self.digitalData,
                             self.totalLength * self.di_channels, byref(self.di_read), None)
 
+
+def closeValves(do_device):
+    do_handle = TaskHandle(0)
+    DAQmxCreateTask('', byref(do_handle))
+
+    DAQmxCreateDOChan(do_handle, do_device, '', DAQmx_Val_ChanForAllLines) 
+    DAQmxWriteDigitalU32(do_handle, 100, 0, -1, DAQmx_Val_GroupByChannel, numpy.zeros(100),
+                            byref(int32()), None)
+
+    DAQmxStartTask(do_handle)
+    DAQmxWaitUntilTaskDone(do_handle, 100)
+
+    time.sleep(0.05)
+    DAQmxStopTask(do_handle)
+    DAQmxClearTask(do_handle)
 
 
 # TODO TESTING #
