@@ -520,16 +520,28 @@ class MultiTask:
 
 def closeValves(do_device):
     do_handle = TaskHandle(0)
+    co_handle = TaskHandle(1)
     DAQmxCreateTask('', byref(do_handle))
+    DAQmxCreateTask('', byref(co_handle))
 
-    DAQmxCreateDOChan(do_handle, do_device, '', DAQmx_Val_ChanForAllLines) 
-    DAQmxWriteDigitalU32(do_handle, 100, 0, -1, DAQmx_Val_GroupByChannel, numpy.zeros(100),
+    DAQmxCreateCOPulseChanFreq(co_handle, 'cDAQ1/Ctr0', '', DAQmx_Val_Hz, DAQmx_Val_Low, 0.0, 20000, 0.5)
+    DAQmxCreateDOChan(do_handle, do_device, '', DAQmx_Val_ChanForAllLines)
+    
+    DAQmxCfgImplicitTiming(co_handle, DAQmx_Val_FiniteSamps, 100)
+    DAQmxCfgSampClkTiming(do_handle, '/cDAQ1/Ctr0InternalOutput', 20000, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps,
+                              numpy.uint64(100))
+    DAQmxWriteDigitalU32(do_handle, 100, 0, -1, DAQmx_Val_GroupByChannel, numpy.zeros(100, dtype=numpy.uint32),
                             byref(int32()), None)
 
     DAQmxStartTask(do_handle)
-    DAQmxWaitUntilTaskDone(do_handle, 100)
+    DAQmxStartTask(co_handle)
+    # DAQmxWaitUntilTaskDone(co_handle, 100)
+    # DAQmxWaitUntilTaskDone(do_handle, 100)
 
     time.sleep(0.05)
+    DAQmxStopTask(co_handle)
+    DAQmxClearTask(co_handle)
+
     DAQmxStopTask(do_handle)
     DAQmxClearTask(do_handle)
 
