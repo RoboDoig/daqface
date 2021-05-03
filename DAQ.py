@@ -240,9 +240,10 @@ class AnalogOutput(Task):
 
 # region [MultiTasks]
 class DoTriggeredCoTask:
-    def __init__(self, do_device, co_device, samp_rate, secs, write, trigger_source):
+    def __init__(self, do_device, co_device, samp_rate, secs, write, trigger_source, controlled_carrier=False):
         self.do_handle = TaskHandle(0)
         self.co_handle = TaskHandle(1)
+        self.do_device = do_device
 
 
         DAQmxCreateTask('', byref(self.do_handle))
@@ -258,9 +259,10 @@ class DoTriggeredCoTask:
         self.sampsPerChanWritten = int32()
         self.write = Util.binary_to_digital_map(write)
         self.sampsPerChan = self.write.shape[1]
+        self.chans = self.write.shape[0]
         self.write = numpy.sum(self.write, axis=0)
-
-
+        if controlled_carrier:
+            self.write += 2**(self.chans+1)
         DAQmxCfgImplicitTiming(self.co_handle, DAQmx_Val_FiniteSamps, self.totalLength)
         DAQmxCfgSampClkTiming(self.do_handle, '/cDAQ1/Ctr0InternalOutput', samp_rate, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps,
                               numpy.uint64(self.totalLength))
@@ -287,12 +289,13 @@ class DoTriggeredCoTask:
  
         DAQmxClearTask(self.do_handle)
         DAQmxClearTask(self.co_handle)
-
+        #closeValves(self.do_device)
 
 class DoCoTask:
-    def __init__(self, do_device, co_device, samp_rate, secs, write):
+    def __init__(self, do_device, co_device, samp_rate, secs, write, controlled_carrier=False):
         self.do_handle = TaskHandle(0)
         self.co_handle = TaskHandle(1)
+        self.do_device = do_device
 
         DAQmxCreateTask('', byref(self.do_handle))
         DAQmxCreateTask('', byref(self.co_handle))
@@ -305,9 +308,13 @@ class DoCoTask:
         self.sampsPerChanWritten = int32()
         self.write = Util.binary_to_digital_map(write)
         self.sampsPerChan = self.write.shape[1]
+        self.chans = self.write.shape[0]
         self.write = numpy.sum(self.write, axis=0)
-        print(self.write.shape)
-        print(self.write[:200])
+        # if controlled_carrier:
+        #     self.write += 2**(self.chans+1)
+        print(self.write)
+        print(len(self.write))
+        print(type(self.write[0]))
 
         DAQmxCfgImplicitTiming(self.co_handle, DAQmx_Val_FiniteSamps, self.totalLength)
         DAQmxCfgSampClkTiming(self.do_handle, '/cDAQ1/Ctr0InternalOutput', samp_rate, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps,
@@ -330,6 +337,7 @@ class DoCoTask:
 
         DAQmxClearTask(self.do_handle)
         DAQmxClearTask(self.co_handle)
+        #closeValves(self.do_device)
 
 class DoAiMultiTask:
     def __init__(self, ai_device, ai_channels, do_device, samp_rate, secs, write, sync_clock):
@@ -546,6 +554,52 @@ def closeValves(do_device):
     DAQmxClearTask(do_handle)
 
 
+## TODO generalise for other devices, currently needs to be the same one as the valves
+# def carrierControlTask(do_device, samp_rate, secs):
+#     do_handle = TaskHandle(2)
+#     co_handle = TaskHandle(3)
+#     DAQmxCreateTask('', byref(do_handle))
+#     DAQmxCreateTask('', byref(co_handle))
+#     DAQmxCreateCOPulseChanFreq(co_handle, 'cDAQ1/Ctr0', '', DAQmx_Val_Hz, DAQmx_Val_Low, 0.0, samp_rate, 0.5)  ## Creates a channel to generate digital pulses
+#     DAQmxCreateDOChan(do_handle, do_device, '', DAQmx_Val_ChanForAllLines) 
+#     totallength = numpy.uint64(samp_rate * secs)
+#     secs = secs
+#     sampsPerChanWritten = int32()
+#     chan_index = int(do_device[-1])
+#     write = np.ones(totallength)*(2**chan_index)
+#     write = write.astype(np.uint32)
+#     print(write)
+#     DAQmxCfgImplicitTiming(co_handle, DAQmx_Val_FiniteSamps, totallength)
+#     DAQmxCfgSampClkTiming(do_handle, '/cDAQ1/Ctr0InternalOutput', samp_rate, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps,
+#                             numpy.uint64(totallength))
+#     DAQmxWriteDigitalU32(do_handle, len(write), 0, -1, DAQmx_Val_GroupByChannel, write,
+#                             byref(sampsPerChanWritten), None)
+#     DAQmxStartTask(do_handle)
+#     DAQmxStartTask(co_handle)
+#     DAQmxWaitUntilTaskDone(co_handle, 100)
+#     DAQmxWaitUntilTaskDone(do_handle, 100)
+#     # do_handle = TaskHandle(2)
+#     # DAQmxCreateTask('', byref(do_handle))
+#     # DAQmxCreateDOChan(do_handle, do_device, '', DAQmx_Val_ChanForAllLines) 
+#     # totallength = numpy.uint64(samp_rate * secs)
+#     # secs = secs
+#     # sampsPerChanWritten = int32()
+#     # write = np.ones(totallength)*512
+#     # write = write.astype(np.uint32)
+#     # print(write)
+#     # DAQmxCfgSampClkTiming(do_handle, '/cDAQ1/Ctr0InternalOutput', samp_rate, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps,
+#     #                         numpy.uint64(totallength))
+#     # DAQmxWriteDigitalU32(do_handle, totallength, 0, -1, DAQmx_Val_GroupByChannel, write,
+#     #                          byref(sampsPerChanWritten), None)
+#     # DAQmxStartTask(do_handle)
+#     # DAQmxWaitUntilTaskDone(do_handle, 10)
+#     DAQmxStopTask(co_handle)
+#     DAQmxClearTask(co_handle)
+#     DAQmxStopTask(do_handle)
+#     DAQmxClearTask(do_handle)
+
+
+# carrierControlTask(do_device, 20000, 2)
 # TODO TESTING #
 # region DoAiMultiTaskTest
 # a = DoAiMultiTask('cDAQ1Mod3/ai0', 1, 'cDAQ1Mod1/port0/line0', 1000.0, 1.0, numpy.zeros((2, 1000)),
