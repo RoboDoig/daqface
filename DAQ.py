@@ -312,9 +312,6 @@ class DoCoTask:
         self.write = numpy.sum(self.write, axis=0)
         # if controlled_carrier:
         #     self.write += 2**(self.chans+1)
-        print(self.write)
-        print(len(self.write))
-        print(type(self.write[0]))
 
         DAQmxCfgImplicitTiming(self.co_handle, DAQmx_Val_FiniteSamps, self.totalLength)
         DAQmxCfgSampClkTiming(self.do_handle, '/cDAQ1/Ctr0InternalOutput', samp_rate, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps,
